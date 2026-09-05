@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bài viết</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+<header class="site"><h1 id="siteTitle"><a href="index.html">My Blog</a></h1></header>
+<main>
+  <a class="back-link" href="index.html">&larr; Tất cả bài viết</a>
+  <div id="content" class="state">Đang tải bài viết...</div>
+</main>
+
+<script>
+const cfg = window.BLOG_CONFIG;
+document.getElementById('siteTitle').innerHTML = `<a href="index.html">${cfg.siteTitle}</a>`;
+
+function parseFrontmatter(raw) {
+  const m = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+  if (!m) return { meta: {}, body: raw };
+  const meta = {};
+  m[1].split('\n').forEach(line => {
+    const idx = line.indexOf(':');
+    if (idx > -1) meta[line.slice(0, idx).trim()] = line.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+  });
+  return { meta, body: m[2] };
+}
+
+async function loadPost() {
+  const el = document.getElementById('content');
+  const params = new URLSearchParams(location.search);
+  const file = params.get('file');
+  if (!file) { el.textContent = 'Thiếu tham số ?file='; return; }
+  try {
+    const rawUrl = `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${file}`;
+    const res = await fetch(rawUrl);
+    if (!res.ok) throw new Error(`Không tải được file (HTTP ${res.status}).`);
+    const raw = await res.text();
+    const { meta, body } = parseFrontmatter(raw);
+    const dm = file.match(/(\d{4}-\d{2}-\d{2})/);
+    const date = meta.date || (dm ? dm[1] : '');
+    const titleMatch = body.match(/^#\s+(.+)$/m);
+    const title = meta.title || (titleMatch ? titleMatch[1] : file);
+    document.title = `${title} · ${cfg.siteTitle}`;
+
+    el.className = '';
+    el.innerHTML = `
+      <div class="post-header">
+        <div class="date">${date}</div>
+        <h1>${title}</h1>
+      </div>
+      <article class="content">${marked.parse(body)}</article>
+    `;
+    renderMathInElement(el, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      throwOnError: false
+    });
+  } catch (e) {
+    el.textContent = 'Lỗi tải bài viết: ' + e.message;
+  }
+}
+loadPost();
+</script>
+</body>
+</html>

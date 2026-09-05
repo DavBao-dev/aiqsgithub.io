@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blog</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="config.js"></script>
+</head>
+<body>
+<header class="site"><h1 id="siteTitle"><a href="index.html">My Blog</a></h1></header>
+<main>
+  <div id="list" class="state">Đang tải danh sách bài viết...</div>
+</main>
+
+<script>
+const cfg = window.BLOG_CONFIG;
+document.getElementById('siteTitle').innerHTML = `<a href="index.html">${cfg.siteTitle}</a>`;
+document.title = cfg.siteTitle;
+
+function parseFrontmatter(raw) {
+  const m = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+  if (!m) return { meta: {}, body: raw };
+  const meta = {};
+  m[1].split('\n').forEach(line => {
+    const idx = line.indexOf(':');
+    if (idx > -1) meta[line.slice(0, idx).trim()] = line.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+  });
+  return { meta, body: m[2] };
+}
+
+function guessTitleAndDate(filename, meta, body) {
+  const dm = filename.match(/^(\d{4}-\d{2}-\d{2})-(.+)\.md$/);
+  const date = meta.date || (dm ? dm[1] : '');
+  let title = meta.title;
+  if (!title) {
+    const h = body.match(/^#\s+(.+)$/m);
+    title = h ? h[1] : (dm ? dm[2].replace(/-/g, ' ') : filename.replace(/\.md$/, ''));
+  }
+  return { title, date };
+}
+
+function excerptOf(body) {
+  const plain = body.replace(/^#.*$/m, '').replace(/[#*`$_>\[\]!]/g, '').trim();
+  return plain.slice(0, 160).replace(/\s+\S*$/, '') + (plain.length > 160 ? '…' : '');
+}
+
+async function loadPosts() {
+  const listEl = document.getElementById('list');
+  try {
+    const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.postsPath}?ref=${cfg.branch}`;
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error(`GitHub API trả về lỗi ${res.status}. Kiểm tra config.js (owner/repo/branch) và đảm bảo repo là Public.`);
+    const files = (await res.json()).filter(f => f.name.endsWith('.md'));
+    if (files.length === 0) {
+      listEl.textContent = `Chưa có bài viết nào trong thư mục "${cfg.postsPath}/". Push một file .md vào đó để xuất hiện ở đây.`;
+      return;
+    }
+    files.sort((a, b) => b.name.localeCompare(a.name)); // mới nhất trước, nhờ prefix ngày YYYY-MM-DD
+
+    const items = await Promise.all(files.map(async f => {
+      const raw = await (await fetch(f.download_url)).text();
+      const { meta, body } = parseFrontmatter(raw);
+      const { title, date } = guessTitleAndDate(f.name, meta, body);
+      return { title, date, excerpt: meta.excerpt || excerptOf(body), path: f.path };
+    }));
+
+    listEl.className = '';
+    listEl.innerHTML = items.map(p => `
+      <div class="post-item">
+        <div class="date">${p.date}</div>
+        <h2><a href="post.html?file=${encodeURIComponent(p.path)}">${p.title}</a></h2>
+        <p>${p.excerpt}</p>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.textContent = 'Lỗi tải danh sách bài viết: ' + e.message;
+  }
+}
+loadPosts();
+</script>
+</body>
+</html>
