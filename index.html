@@ -9,14 +9,24 @@
 </head>
 <body>
 <header class="site"><h1 id="siteTitle"><a href="index.html">My Blog</a></h1></header>
-<main>
-  <div id="list" class="state">Đang tải danh sách bài viết...</div>
-</main>
+
+<div class="layout-wrap">
+  <aside class="sidebar">
+    <h2>Mục lục</h2>
+    <div id="sidebarList" class="state">Đang tải...</div>
+  </aside>
+  <main>
+    <div id="list" class="state">Đang tải danh sách bài viết...</div>
+  </main>
+</div>
 
 <script>
 const cfg = window.BLOG_CONFIG;
 document.getElementById('siteTitle').innerHTML = `<a href="index.html">${cfg.siteTitle}</a>`;
 document.title = cfg.siteTitle;
+
+// Chuẩn hoá Unicode về dạng dựng sẵn (NFC) để tránh lỗi tách dấu (vd "viê´t" thay vì "viết")
+function norm(s) { return s ? s.normalize('NFC') : s; }
 
 function parseFrontmatter(raw) {
   const m = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
@@ -24,9 +34,9 @@ function parseFrontmatter(raw) {
   const meta = {};
   m[1].split('\n').forEach(line => {
     const idx = line.indexOf(':');
-    if (idx > -1) meta[line.slice(0, idx).trim()] = line.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+    if (idx > -1) meta[line.slice(0, idx).trim()] = norm(line.slice(idx + 1).trim().replace(/^["']|["']$/g, ''));
   });
-  return { meta, body: m[2] };
+  return { meta, body: norm(m[2]) };
 }
 
 function guessTitleAndDate(filename, meta, body) {
@@ -47,6 +57,7 @@ function excerptOf(body) {
 
 async function loadPosts() {
   const listEl = document.getElementById('list');
+  const sidebarEl = document.getElementById('sidebarList');
   try {
     const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.postsPath}?ref=${cfg.branch}`;
     const res = await fetch(apiUrl);
@@ -54,12 +65,13 @@ async function loadPosts() {
     const files = (await res.json()).filter(f => f.name.endsWith('.md'));
     if (files.length === 0) {
       listEl.textContent = `Chưa có bài viết nào trong thư mục "${cfg.postsPath}/". Push một file .md vào đó để xuất hiện ở đây.`;
+      sidebarEl.textContent = 'Chưa có bài viết.';
       return;
     }
     files.sort((a, b) => b.name.localeCompare(a.name)); // mới nhất trước, nhờ prefix ngày YYYY-MM-DD
 
     const items = await Promise.all(files.map(async f => {
-      const raw = await (await fetch(f.download_url)).text();
+      const raw = norm(await (await fetch(f.download_url)).text());
       const { meta, body } = parseFrontmatter(raw);
       const { title, date } = guessTitleAndDate(f.name, meta, body);
       return { title, date, excerpt: meta.excerpt || excerptOf(body), path: f.path };
@@ -73,8 +85,16 @@ async function loadPosts() {
         <p>${p.excerpt}</p>
       </div>
     `).join('');
+
+    sidebarEl.className = '';
+    sidebarEl.innerHTML = `<ul>${items.map(p => `
+      <li>
+        <a href="post.html?file=${encodeURIComponent(p.path)}">${p.title}<span class="date">${p.date}</span></a>
+      </li>
+    `).join('')}</ul>`;
   } catch (e) {
     listEl.textContent = 'Lỗi tải danh sách bài viết: ' + e.message;
+    sidebarEl.textContent = 'Lỗi tải mục lục.';
   }
 }
 loadPosts();
