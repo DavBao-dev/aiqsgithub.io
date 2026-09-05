@@ -58,10 +58,14 @@ function excerptOf(body) {
 async function loadPosts() {
   const listEl = document.getElementById('list');
   const sidebarEl = document.getElementById('sidebarList');
+  const owner = (cfg.owner || '').trim();
+  const repo = (cfg.repo || '').trim();
+  const branch = (cfg.branch || '').trim();
+  const postsPath = (cfg.postsPath || '').trim();
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${postsPath}?ref=${branch}`;
   try {
-    const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.postsPath}?ref=${cfg.branch}`;
     const res = await fetch(apiUrl);
-    if (!res.ok) throw new Error(`GitHub API trả về lỗi ${res.status}. Kiểm tra config.js (owner/repo/branch) và đảm bảo repo là Public.`);
+    if (!res.ok) throw new Error(`GitHub API trả về lỗi ${res.status} khi gọi:<br><a href="${apiUrl}" target="_blank" rel="noopener">${apiUrl}</a><br>Mở link trên ở tab mới — nếu nó vẫn báo lỗi thì owner/repo/branch/postsPath trong config.js đang sai; nếu nó ra JSON bình thường thì trang đang dính cache, hãy hard refresh (Ctrl+Shift+R).`);
     const files = (await res.json()).filter(f => f.name.endsWith('.md'));
     if (files.length === 0) {
       listEl.textContent = `Chưa có bài viết nào trong thư mục "${cfg.postsPath}/". Push một file .md vào đó để xuất hiện ở đây.`;
@@ -93,7 +97,7 @@ async function loadPosts() {
       </li>
     `).join('')}</ul>`;
   } catch (e) {
-    listEl.textContent = 'Lỗi tải danh sách bài viết: ' + e.message;
+    listEl.innerHTML = 'Lỗi tải danh sách bài viết: ' + e.message;
     sidebarEl.textContent = 'Lỗi tải mục lục.';
   }
 }

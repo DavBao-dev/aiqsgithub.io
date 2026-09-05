@@ -58,10 +58,14 @@ const activeFile = new URLSearchParams(location.search).get('file') || '';
 
 async function loadSidebar() {
   const sidebarEl = document.getElementById('sidebarList');
+  const owner = (cfg.owner || '').trim();
+  const repo = (cfg.repo || '').trim();
+  const branch = (cfg.branch || '').trim();
+  const postsPath = (cfg.postsPath || '').trim();
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${postsPath}?ref=${branch}`;
   try {
-    const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.postsPath}?ref=${cfg.branch}`;
     const res = await fetch(apiUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} tại ${apiUrl}`);
     const files = (await res.json()).filter(f => f.name.endsWith('.md'));
     files.sort((a, b) => b.name.localeCompare(a.name));
 
@@ -88,9 +92,12 @@ async function loadPost() {
   const file = activeFile;
   if (!file) { el.textContent = 'Thiếu tham số ?file='; return; }
   try {
-    const rawUrl = `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${file}`;
+    const owner = (cfg.owner || '').trim();
+    const repo = (cfg.repo || '').trim();
+    const branch = (cfg.branch || '').trim();
+    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file}`;
     const res = await fetch(rawUrl);
-    if (!res.ok) throw new Error(`Không tải được file (HTTP ${res.status}).`);
+    if (!res.ok) throw new Error(`Không tải được file (HTTP ${res.status}) tại ${rawUrl}`);
     const raw = norm(await res.text());
     const { meta, body } = parseFrontmatter(raw);
     const dm = file.match(/(\d{4}-\d{2}-\d{2})/);
